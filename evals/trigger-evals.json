@@ -1,0 +1,9 @@
+[
+  {"query": "Maak een logo van een vos met een transparante achtergrond.", "should_trigger": true},
+  {"query": "Maak een afbeelding van een rode sneaker zonder achtergrond.", "should_trigger": true},
+  {"query": "Maak een uitgeknipte foto van een koffiemok.", "should_trigger": true},
+  {"query": "Haal de achtergrond weg van references/kat.png.", "should_trigger": true},
+  {"query": "Maak een foto van een koffiemok op een witte achtergrond.", "should_trigger": false},
+  {"query": "Maak een foto van een transparant glas water op tafel.", "should_trigger": false},
+  {"query": "Verander de achtergrond van references/kat.png in een strand.", "should_trigger": false}
+]

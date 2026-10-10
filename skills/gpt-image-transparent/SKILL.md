@@ -22,7 +22,7 @@ Three things need fixing afterwards, and this skill does all of them:
 Tools (Python 3 standard library only):
 
 ```bash
-GEN="<gptimage skill dir>/bin/gpt-image-2"                 # the gptimage wrapper
+GEN="${CLAUDE_SKILL_DIR}/../gptimage/bin/gpt-image-2"     # the gptimage wrapper (sibling skill)
 CUT="${CLAUDE_SKILL_DIR}/bin/gpt-image-cutout"            # this skill
 ```
 

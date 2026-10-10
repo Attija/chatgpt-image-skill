@@ -27,12 +27,13 @@ skill/agent files are English.
 | `skills/gpt-image-transparent/` | Transparent PNGs. `bin/gpt-image-cutout` (finish / chroma / vision), `bin/vision-mask.swift`. |
 | `agents/gpt-image-prompter.md` | Sonnet subagent, prompts only (Read/Grep/Glob). |
 | `agents/cutout-inspector.md` | Sonnet subagent, judges cut-outs (Read/Bash/Glob), max 2 re-runs, PASS/FAIL report. |
-| `evals/` | Trigger evals (`claude plugin eval`): `pos-*` must load gpt-image-transparent, `neg-*` must load gptimage and not the transparent skill, `agent-*` checks the inspector. |
+| `evals/trigger-evals.json` | Trigger evals for gpt-image-transparent: one list of `{query, should_trigger}` (skill-creator trigger format). |
+| `evals/run_triggers.py` | Runs them with `claude -p --plugin-dir .`. It only allows Skill/Read/Glob/Grep and stops at the first Skill call, so nothing is generated (~30 s, 7 queries × 3). |
 | `install.sh` | Copies skills/agents to `~/.claude` (or `$CLAUDE_CONFIG_DIR`); backups go to `~/.claude/backups/chatgpt-image-skill/<stamp>/` (never inside `skills/`, or Claude loads duplicates). `--uninstall` removes only what it installed (marker file per skill, `ours()` signature per agent). |
 | `assets/banner-v2.png` | README banner (made with this plugin). |
 
-When adding a skill or agent: add it to `SKILLS`/`AGENTS` and to `ours()` in `install.sh`, to the README table,
-to `CHANGELOG.md`, and add eval cases.
+When adding a skill or agent: add it to `SKILLS`/`AGENTS` and to `ours()` in `install.sh`, to the README table
+and to `CHANGELOG.md`. Keep the evals simple: one short sentence per trigger plus a few near-miss negatives.
 
 ## How the pieces work
 
@@ -78,7 +79,7 @@ bash -n install.sh
 python3 -m py_compile skills/gptimage/bin/gpt-image-2 skills/gpt-image-transparent/bin/gpt-image-cutout
 claude plugin validate . && claude plugin validate .claude-plugin/plugin.json   # 1 expected warning: CLAUDE.md is for repo work, not plugin context
 python3 skills/gptimage/bin/gpt-image-2 --check            # Codex login, no image
-claude plugin eval . --runs 3 -j 4 --no-publish            # trigger evals
+python3 evals/run_triggers.py                               # trigger evals, must be 7/7
 HOME=$(mktemp -d) ./install.sh && HOME=<same> ./install.sh --uninstall   # clean install round trip
 grep -riE "api[ _-]?key|OPENAI_API|/v1/|fal\.ai|flare|sunburst|\bAPI\b" --exclude-dir=.git --exclude=CLAUDE.md .   # must be empty
 ```

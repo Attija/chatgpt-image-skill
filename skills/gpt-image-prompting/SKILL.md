@@ -98,7 +98,7 @@ following that skill's rules (references are files, revisions edit the latest ou
 overwrite):
 
 ```bash
-python3 "<gptimage skill dir>/bin/gpt-image-2" "<approved prompt>" "$PWD/generated-images/<name>.png" --size <WxH> [--edit-target <file>] [--image <file> ...]
+python3 "${CLAUDE_SKILL_DIR}/../gptimage/bin/gpt-image-2" "<approved prompt>" "$PWD/generated-images/<name>.png" --size <WxH> [--edit-target <file>] [--image <file> ...]
 ```
 
 Set the Bash timeout to 600000 ms (or run in the background for batches), then `Read` each image back.
