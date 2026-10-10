@@ -6,7 +6,7 @@ Laat Claude Code afbeeldingen maken en bewerken via **Codex**, op je eigen **Cha
 Je betaalt niet per beeld en hebt geen extra sleutels nodig: Claude roept `codex exec` aan, Codex gebruikt
 zijn ingebouwde `image_generation` en het resultaat landt als PNG in je project.
 
-Het pakket bevat:
+Versie 1.1.1 — zie [CHANGELOG.md](CHANGELOG.md). Het pakket bevat:
 
 | Onderdeel | Wat het doet |
 |---|---|
@@ -155,7 +155,7 @@ Er is geen automatische retry of terugval: een fout van Codex krijg je één kee
 
 ## Transparante achtergrond
 
-Vraag gewoon om "transparant", "zonder achtergrond", "vrijstaand" of "uitknippen". De skill `gpt-image-transparent` neemt het dan over:
+Vraag gewoon om een **transparante achtergrond**, iets **zonder achtergrond**, een **uitgeknipte** foto, of laat de **achtergrond weghalen**. De skill `gpt-image-transparent` neemt het dan over. Bij "witte achtergrond", "transparant glas" of "een andere achtergrond" gebeurt dat bewust niet; dat zijn gewone beelden.
 
 1. Codex maakt het beeld met de toevoeging *"on a transparent background."*. Codex levert dan een echt alpha-kanaal; dat bestand wordt bewaard als `<naam>.source.png`.
 2. `gpt-image-cutout` werkt het af tot `<naam>.png`:
@@ -169,7 +169,7 @@ Vraag gewoon om "transparant", "zonder achtergrond", "vrijstaand" of "uitknippen
 
 Getest op 8 + 4 beelden (logo's, mokken, sneaker, kitten, puppy, blad, vetplant): **12 van 12 kregen echte transparantie** en de 4 eindtests haalden allemaal PASS met dezelfde instellingen.
 
-Revisies bewerken de `.source.png` en blijven transparant. Een bestaand beeld zonder alpha kan ook:
+Revisies bewerken de laatste `.source.png` en blijven transparant (`<naam>-v2.source.png` → `<naam>-v2.png`). Een bestaand beeld zonder alpha kan ook:
 - **effen achtergrond:** chroma-key, die de kleur op de rand meet;
 - **drukke achtergrond:** `--method vision` (Apple Vision, macOS 14+).
 
@@ -177,9 +177,32 @@ Daarvoor is niets extra nodig. Alleen `--method vision` gebruikt `swiftc` uit de
 
 Codex kiest zelf het formaat van een transparant beeld; `--size` heeft daar geen effect. Gebruik `--trim` om het bij te snijden tot het onderwerp.
 
+Zelf aanroepen kan ook:
+
+```bash
+C=~/.claude/skills/gpt-image-transparent/bin/gpt-image-cutout
+
+# Codex-origineel afwerken (automatisch herkend aan het alpha-kanaal)
+python3 $C generated-images/logo.source.png generated-images/logo.png --trim
+
+# achtergrond weghalen van een bestaand beeld
+python3 $C references/kat.png generated-images/kat.png                  # effen achtergrond
+python3 $C references/kat.png generated-images/kat.png --method vision  # drukke achtergrond (macOS)
+```
+
+| Optie | Betekenis |
+|---|---|
+| `--method auto\|finish\|chroma\|vision` | `auto` kiest zelf: afwerken als de bron al transparant is, anders chroma-key. |
+| `--trim [PAD]` | Bijsnijden tot het onderwerp, met PAD pixels marge (standaard 8). |
+| `--no-fill-holes` | Doorschijnende delen laten zoals ze zijn (glas, rook). |
+| `--holes` | Bij een witte of grijze achtergrond ook ingesloten gaten wegnemen (bijv. het oor van een mok). |
+| `--overwrite` | Een bestaand bestand mag vervangen worden. Het bronbestand wordt nooit overschreven. |
+
+Er komt altijd een `.preview.png` bij, en de statistieken verschijnen als JSON.
+
 ## Welk beeldmodel?
 
-Codex bepaalt zelf welk beeldmodel zijn `image_generation` gebruikt; je kunt het niet kiezen. Op dit moment levert Codex nog beelden van *gpt-image 2.0*, ook al is ChatGPT Images 2.5 aangekondigd. Zodra Codex overstapt, gebruikt deze skill het nieuwe model vanzelf, zonder update.
+Codex bepaalt zelf welk beeldmodel zijn `image_generation` gebruikt; je kunt het niet kiezen. Volgens meldingen van gebruikers levert Codex nog beelden van *gpt-image 2.0*, ook al is ChatGPT Images 2.5 aangekondigd. Zodra Codex overstapt, gebruikt deze skill het nieuwe model vanzelf, zonder update.
 
 ## Kosten en limieten
 
@@ -201,7 +224,19 @@ ook als sessie in je Codex-geschiedenis.
 | Resultaat is een collage van alle inputbeelden | Geef elk beeld een rol in de prompt en laat overbodige referenties weg. |
 | Verkeerde verhouding bij een bewerking | Met inputbeelden houdt het resultaat meestal de vorm van Image 1 aan; `--size` is alleen een hint. |
 | Transparant beeld heeft een doorschijnende vlek | Wordt standaard dichtgemaakt. Is het glas of rook en moet het doorschijnend blijven, gebruik dan `--no-fill-holes`. |
+| `exit 5` bij `--method vision` | Apple Vision is niet beschikbaar (macOS 14+ en `xcode-select --install` nodig) of vond geen onderwerp. |
 | Achtergrond weghalen geeft exit 4 | De achtergrond is niet effen. Gebruik `--method vision` (macOS) of laat het beeld opnieuw maken met transparante achtergrond. |
+
+## Voor ontwikkelaars
+
+- [`CLAUDE.md`](CLAUDE.md) beschrijft de opbouw, de harde regels, hoe de onderdelen werken en de controles vóór een release. Een nieuwe Claude Code-sessie in deze repo leest dat automatisch.
+- **Trigger-tests:** `evals/trigger-evals.json` is één lijst met korte zinnen die de transparant-skill wel of niet moeten laten afgaan. Draaien:
+
+  ```bash
+  python3 evals/run_triggers.py
+  ```
+
+  Duurt ongeveer 30 seconden. Er worden geen beelden gemaakt. Een nieuwe test toevoegen = één regel toevoegen aan de lijst.
 
 ## Verwijderen
 
