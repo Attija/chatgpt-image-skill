@@ -1,19 +1,27 @@
 #!/usr/bin/env bash
-# Installeert de ChatGPT Image Skill (gptimage + gpt-image-prompting + gpt-image-prompter)
+# Installeert de ChatGPT Image Skill (skills gptimage, gpt-image-prompting, gpt-image-transparent;
+# agents gpt-image-prompter, cutout-inspector)
 # in je Claude Code-map. Gebruik:  ./install.sh            installeren / bijwerken
 #                                 ./install.sh --uninstall  verwijderen
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-SKILLS=(gptimage gpt-image-prompting)
-AGENTS=(gpt-image-prompter.md)
+SKILLS=(gptimage gpt-image-prompting gpt-image-transparent)
+AGENTS=(gpt-image-prompter.md cutout-inspector.md)
 MARKER=".installed-by-chatgpt-image-skill"
-AGENT_SIGNATURE="Codex image generator (gptimage skill"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 BACKUP_DIR="$CLAUDE_DIR/backups/chatgpt-image-skill/$STAMP"
 
 say()  { printf '%s\n' "$*"; }
+# Herkent een agent-bestand dat door dit pakket is geplaatst (bash 3.2: geen associatieve arrays).
+ours() {
+  case "$(basename "$1")" in
+    gpt-image-prompter.md) grep -q "Codex image generator (gptimage skill" "$1" ;;
+    cutout-inspector.md)   grep -q "transparent PNG cut-outs made with the gpt-image-transparent" "$1" ;;
+    *) return 1 ;;
+  esac
+}
 ok()   { printf '  ✓ %s\n' "$*"; }
 warn() { printf '  ! %s\n' "$*"; }
 
@@ -29,7 +37,7 @@ uninstall() {
   done
   for a in "${AGENTS[@]}"; do
     target="$CLAUDE_DIR/agents/$a"
-    if [[ -f "$target" ]] && grep -q "$AGENT_SIGNATURE" "$target"; then
+    if [[ -f "$target" ]] && ours "$target"; then
       rm -f "$target"; ok "agent ${a%.md} verwijderd"
     elif [[ -e "$target" ]]; then
       warn "agents/$a is niet door dit script geïnstalleerd; laat ik staan"
@@ -76,18 +84,19 @@ install() {
       backup "$target" skills
     fi
     cp -R "$REPO_DIR/skills/$s" "$target"
+    find "$target" -name __pycache__ -prune -exec rm -rf {} +
     touch "$target/$MARKER"
     ok "skill $s"
   done
   for a in "${AGENTS[@]}"; do
     target="$CLAUDE_DIR/agents/$a"
-    if [[ -f "$target" ]] && ! grep -q "$AGENT_SIGNATURE" "$target"; then
+    if [[ -f "$target" ]] && ! ours "$target"; then
       backup "$target" agents
     fi
     cp "$REPO_DIR/agents/$a" "$target"
     ok "agent ${a%.md}"
   done
-  chmod +x "$CLAUDE_DIR/skills/gptimage/bin/gpt-image-2"
+  chmod +x "$CLAUDE_DIR/skills/gptimage/bin/gpt-image-2" "$CLAUDE_DIR/skills/gpt-image-transparent/bin/gpt-image-cutout"
 
   if [[ -f "$CLAUDE_DIR/plugins/installed_plugins.json" ]] \
      && grep -q '"chatgpt-image@' "$CLAUDE_DIR/plugins/installed_plugins.json"; then

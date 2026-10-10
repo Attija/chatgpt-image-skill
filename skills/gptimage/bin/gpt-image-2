@@ -17,7 +17,7 @@ Options:
   --size WxH|auto           shape hint (square / portrait / landscape); Codex picks the pixels
   --orchestrator-model M    auto (default) | account-default | <model id>
   --model M                 alias of --orchestrator-model
-  --timeout SEC             default 900
+  --timeout SEC             default 540
   --overwrite               allow replacing an existing output file
   --check                   only verify python3 + Codex login, print OK
 
@@ -39,12 +39,15 @@ import sys
 import tempfile
 
 DEFAULT_ORCHESTRATOR = os.environ.get("GPTIMAGE_CODEX_MODEL", "auto")
-DEFAULT_TIMEOUT = 900
+DEFAULT_TIMEOUT = 540  # below the 600 s Bash timeout the skills recommend
 CODEX_HOME = os.path.expanduser(os.environ.get("CODEX_HOME", "~/.codex"))
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 # @path tokens: not preceded by a word char (so emails don't match), ending in an image extension.
-REF_PATTERN = re.compile(r"(?<![\w.])@((?:~|\.{1,2})?/?[^\s@\"'`]+?\.(?:png|jpe?g|webp))(?=$|[\s,;:!?)\]}\"'`]|\.(?:\s|$))",
+# @path tokens: not part of a word, URL or path before the @ (so emails and .../@user/... URLs are
+# ignored); the path ends at an image extension that is not followed by more path characters.
+REF_PATTERN = re.compile(r"(?<![\w/.:@])@([^\s@\"'`<>()\[\]{}*\u201c\u201d\u2018\u2019]+?\.(?:png|jpe?g|webp))(?![\w/-]|\.[\w/])",
                          re.IGNORECASE)
+LEFTOVER_REF = re.compile(r"(?<![\w/.:@])@\S+?\.(?:png|jpe?g|webp)(?![\w/-]|\.[\w/])", re.IGNORECASE)
 
 
 def die(msg, code=1):
@@ -89,9 +92,11 @@ def validate_image(path, what):
     return path
 
 
-def resolve_prompt_refs(prompt, first_index):
-    """Replace @path image tokens with 'Image N'. Returns (sent_prompt, paths, mapping)."""
-    paths, mapping, index_of = [], [], {}
+def resolve_prompt_refs(prompt, first_index, attached=()):
+    """Replace @path image tokens with 'Image N'. A token naming an already attached image
+    (--edit-target/--image) gets that image's number. Returns (sent_prompt, new_paths, mapping)."""
+    paths, mapping = [], []
+    index_of = {p: n for n, p in enumerate(attached, 1)}
 
     def sub(m):
         token = m.group(1)
@@ -99,10 +104,15 @@ def resolve_prompt_refs(prompt, first_index):
         if path not in index_of:
             index_of[path] = first_index + len(paths)
             paths.append(path)
-            mapping.append((token, index_of[path]))
+        mapping.append((token, index_of[path]))
         return f"Image {index_of[path]}"
 
-    return REF_PATTERN.sub(sub, prompt), paths, mapping
+    sent = REF_PATTERN.sub(sub, prompt)
+    left = LEFTOVER_REF.search(sent)
+    if left:
+        die(f"could not resolve the reference {left.group(0)!r}; write it as @path/to/file.png "
+            "separated by spaces, or pass the file with --image", 2)
+    return sent, paths, mapping
 
 
 def build_instruction(prompt, n_images, size, has_edit_target):
@@ -256,8 +266,6 @@ def parse_args(argv):
             opts["images"].append(val)
         elif a == "--edit-target":
             opts["edit_target"] = val
-        elif a == "--quality":
-            pass  # accepted for old callers; has no effect on the Codex route
         else:
             die(f"unknown or incomplete arg: {a}", 2)
         i += 2
@@ -283,11 +291,13 @@ def prepare(opts):
         if path not in images:
             images.append(path)
 
-    sent_prompt, ref_paths, mapping = resolve_prompt_refs(opts["prompt"], len(images) + 1)
-    for p in ref_paths:
-        if p in images:
-            die(f"@reference {p} is already attached via --image/--edit-target; use it once", 2)
+    sent_prompt, ref_paths, mapping = resolve_prompt_refs(opts["prompt"], len(images) + 1, images)
     images += ref_paths
+
+    aspect_hint(opts["size"])  # validate before anything is generated
+    if out.lower().endswith((".jpg", ".jpeg")) and not (shutil.which("sips") or shutil.which("magick")):
+        die("cannot write .jpg/.jpeg: neither sips (macOS) nor magick (ImageMagick) is available. "
+            "Use a .png output path instead.", 2)
 
     if os.path.exists(out) and not opts["overwrite"]:
         die(f"output already exists: {out} (pick a new name such as -v2, or pass --overwrite)", 2)
@@ -329,8 +339,10 @@ def main():
     write_output(results[-1], out)
 
     revised = results[-1].get("revised_prompt") or ""
+    note = out + ".revised_prompt.txt"
+    if os.path.exists(note):
+        os.remove(note)  # left over from an earlier run with --overwrite
     if " ".join(revised.split()) != " ".join(sent_prompt.split()):
-        note = out + ".revised_prompt.txt"
         with open(note, "w") as f:
             if sent_prompt != opts["prompt"]:
                 f.write(f"GIVEN:\n{opts['prompt']}\n\n")

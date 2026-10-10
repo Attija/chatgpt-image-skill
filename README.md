@@ -13,6 +13,8 @@ Het pakket bevat:
 | **`gptimage`** (skill) | Maakt het beeld. Bevat de wrapper `bin/gpt-image-2`, die Codex aanstuurt. |
 | **`gpt-image-prompting`** (skill) | Schrijft op verzoek een sterke Engelse prompt, of meerdere verschillende concepten. |
 | **`gpt-image-prompter`** (agent) | Dezelfde prompt-engineering als subagent op Sonnet, handig voor batches. |
+| **`gpt-image-transparent`** (skill) | Beelden met **transparante achtergrond**, en achtergrond weghalen bij bestaande beelden. |
+| **`cutout-inspector`** (agent) | Keurt elke uitsnede op schaakbord, zwart en wit, en geeft PASS of FAIL. |
 
 ```
 jouw verzoek ──► (optioneel: prompt-agent schrijft prompt, jij keurt goed)
@@ -55,7 +57,7 @@ cd chatgpt-image-skill
 
 Het script:
 - controleert of `python3` en `codex` aanwezig zijn;
-- kopieert de twee skills naar `~/.claude/skills/` en de agent naar `~/.claude/agents/`;
+- kopieert de drie skills naar `~/.claude/skills/` en de twee agents naar `~/.claude/agents/`;
 - verplaatst een bestaande versie met dezelfde naam eerst naar `~/.claude/backups/chatgpt-image-skill/<tijdstip>/`;
 - test of Codex klaar is.
 
@@ -91,6 +93,8 @@ Praat gewoon met Claude Code, in het Nederlands of Engels.
 | *gebruik @references/character.png als personage en zet hem in een regenachtige straat in Tokio* | Het bestand gaat echt mee als referentie (Image 1). |
 | *maak de paraplu geel* (na het vorige beeld) | Het **laatste resultaat** wordt bewerkt en opgeslagen als `…-v2.png`. |
 | *maak vijf verschillende posterontwerpen voor mijn bakkerij* | Vijf aparte concepten, `poster-01.png` t/m `poster-05.png`. |
+| *maak een logo van een vos met transparante achtergrond* | Echte PNG met alpha, afgewerkt en gekeurd (zie hieronder). |
+| *haal de achtergrond weg van references/kat.png* | De achtergrond wordt uitgeknipt; bij een drukke achtergrond via Apple Vision. |
 | *schrijf een goede prompt voor een productfoto van mijn mok* | De prompt-skill of -agent schrijft de prompt; pas na jouw akkoord wordt het beeld gemaakt. |
 
 De beelden komen in `generated-images/` in je project. Die map staat in `.gitignore`.
@@ -137,7 +141,7 @@ python3 $W "Make the umbrella yellow. Change nothing else." "$PWD/generated-imag
 | `--size BxH` | Alleen een vormhint: vierkant, staand of liggend. Codex kiest de exacte pixels. |
 | `--overwrite` | Een bestaand bestand mag vervangen worden. |
 | `--orchestrator-model` | `auto` (standaard), `account-default`, of een model-ID dat je zelf kiest. |
-| `--timeout SEC` | Standaard 900. |
+| `--timeout SEC` | Standaard 540 (net onder de Bash-timeout van 600 s). |
 | `--check` | Controleert alleen python3 en de Codex-login. |
 
 Over `--orchestrator-model`: Codex gebruikt een taalmodel om de beeldtool aan te sturen.
@@ -148,6 +152,30 @@ Over `--orchestrator-model`: Codex gebruikt een taalmodel om de beeldtool aan te
 Er is geen automatische retry of terugval: een fout van Codex krijg je één keer, letterlijk, te zien.
 
 ---
+
+## Transparante achtergrond
+
+Vraag gewoon om "transparant", "zonder achtergrond", "vrijstaand" of "uitknippen". De skill `gpt-image-transparent` neemt het dan over:
+
+1. Codex maakt het beeld met de toevoeging *"on a transparent background."*. Codex levert dan een echt alpha-kanaal; dat bestand wordt bewaard als `<naam>.source.png`.
+2. `gpt-image-cutout` werkt het af tot `<naam>.png`:
+   - het onderwerp wordt 100 % dekkend (Codex levert alpha 250–254, dus 1–2 % doorschijnend);
+   - restwaas op de achtergrond verdwijnt;
+   - een doorschijnende vlek midden in een vlak wordt dichtgemaakt, terwijl echte gaten zoals een oor van een mok open blijven;
+   - zachte randen zoals vacht blijven zacht.
+
+   Er komt ook een preview bij: `<naam>.preview.png`, met het resultaat op schaakbord, zwart en wit.
+3. De agent `cutout-inspector` keurt het resultaat en geeft PASS of FAIL.
+
+Getest op 8 + 4 beelden (logo's, mokken, sneaker, kitten, puppy, blad, vetplant): **12 van 12 kregen echte transparantie** en de 4 eindtests haalden allemaal PASS met dezelfde instellingen.
+
+Revisies bewerken de `.source.png` en blijven transparant. Een bestaand beeld zonder alpha kan ook:
+- **effen achtergrond:** chroma-key, die de kleur op de rand meet;
+- **drukke achtergrond:** `--method vision` (Apple Vision, macOS 14+).
+
+Daarvoor is niets extra nodig. Alleen `--method vision` gebruikt `swiftc` uit de Xcode Command Line Tools (`xcode-select --install`).
+
+Codex kiest zelf het formaat van een transparant beeld; `--size` heeft daar geen effect. Gebruik `--trim` om het bij te snijden tot het onderwerp.
 
 ## Welk beeldmodel?
 
@@ -172,7 +200,8 @@ ook als sessie in je Codex-geschiedenis.
 | Limiet bereikt | Wacht tot de ChatGPT-limiet is gereset. |
 | Resultaat is een collage van alle inputbeelden | Geef elk beeld een rol in de prompt en laat overbodige referenties weg. |
 | Verkeerde verhouding bij een bewerking | Met inputbeelden houdt het resultaat meestal de vorm van Image 1 aan; `--size` is alleen een hint. |
-| Transparante achtergrond nodig | Dat kan via Codex nu niet. Vraag om een effen achtergrond en stel het beeld daarna vrij. |
+| Transparant beeld heeft een doorschijnende vlek | Wordt standaard dichtgemaakt. Is het glas of rook en moet het doorschijnend blijven, gebruik dan `--no-fill-holes`. |
+| Achtergrond weghalen geeft exit 4 | De achtergrond is niet effen. Gebruik `--method vision` (macOS) of laat het beeld opnieuw maken met transparante achtergrond. |
 
 ## Verwijderen
 

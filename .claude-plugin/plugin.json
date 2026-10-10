@@ -1,7 +1,7 @@
 {
   "name": "chatgpt-image",
-  "version": "1.0.0",
-  "description": "Image generation in Claude Code via Codex on your ChatGPT subscription: the gptimage wrapper skill, a prompt-engineering skill and a gpt-image-prompter subagent.",
+  "version": "1.1.0",
+  "description": "Image generation in Claude Code via Codex on your ChatGPT subscription: the gptimage wrapper skill, a prompt-engineering skill, a gpt-image-prompter subagent, and transparent PNGs with a cutout-inspector subagent.",
   "author": {
     "name": "Attija",
     "email": "attdevries@gmail.com"

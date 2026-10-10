@@ -1,6 +1,6 @@
 ---
 name: gptimage
-description: Give Claude Code image generation via Codex (the image_generation tool on the user's ChatGPT subscription). Whenever the user asks for an image, a mockup, a visual reference, a diagram, a design, a logo, an avatar, an illustration, an edit of an image, or any other kind of picture, use the bundled wrapper script to generate it.
+description: Give Claude Code image generation via Codex (the image_generation tool on the user's ChatGPT subscription). Whenever the user asks for an image, a mockup, a visual reference, a diagram, a design, a logo, an avatar, an illustration, an edit of an image, or any other kind of picture, use the bundled wrapper script to generate it. When the image must have a transparent background or no background (transparant, zonder achtergrond, vrijstaand, cut-out, remove background), use the gpt-image-transparent skill instead.
 ---
 
 # gptimage
@@ -26,11 +26,11 @@ inside this skill's base directory (shown when the skill loads).
 |---|---|
 | `--edit-target PATH` | The image to edit. It is sent as **Image 1**. |
 | `--image PATH` | A reference image (repeatable), numbered after the edit target. |
-| `@path/to/file.png` in the prompt | Also attached as a reference; the token is replaced by `Image N` in the prompt that is sent. This is the only change the wrapper makes to a prompt. |
+| `@path/to/file.png` in the prompt | Also attached as a reference; the token is replaced by `Image N` in the prompt that is sent (a file that is already the edit target or an `--image` keeps its number). This is the only change the wrapper makes to a prompt. Paths with spaces: use `--image`. |
 | `--size WxH` or `auto` | Shape hint only (square / portrait / landscape). Codex picks the pixels and, with input images, usually keeps the shape of Image 1; check with `sips -g pixelWidth -g pixelHeight` when it matters. |
 | `--overwrite` | Allow replacing an existing output. Without it the wrapper refuses (exit 2). |
 | `--orchestrator-model` | `auto` (default: Codex picks a current model for the account, low reasoning), `account-default` (no overrides at all), or an explicit model ID the user asked for. |
-| `--timeout SEC` | Default 900. |
+| `--timeout SEC` | Default 540, so it ends before a 600 s Bash timeout. |
 | `--check` | Verify python3 + Codex ChatGPT login without generating. |
 
 - Inputs must be readable `.png`, `.jpg`, `.jpeg` or `.webp` files. Output ends in `.png` (or `.jpg`/`.jpeg`).
@@ -106,7 +106,7 @@ python3 "$W" "Make the umbrella yellow. Change nothing else." "$PWD/generated-im
 
 - Small programmatic images (1px dots, solid placeholders, simple charts): write them with a few lines of code.
 - Pixel-exact editing: use an image library.
-- Transparent backgrounds are not available through Codex today. Generate on a plain, solid background and cut out afterwards.
+- Transparent background, no background, cut-out or background removal: use the `gpt-image-transparent` skill. It asks Codex for transparency and finishes and checks the alpha.
 
 ## Model status
 

@@ -7,3 +7,4 @@ generated-images/
 .DS_Store
 __pycache__/
 !assets/*.png
+evals/results/

@@ -14,7 +14,8 @@ lets you control: the prompt, the input images and a shape hint.
 - Edits: "Change only X. Keep everything else exactly the same." plus a preserve list, restated every turn.
 - Quote literal text, give typography and placement, and say it appears exactly once.
 - Reference inputs by index: "Image 1: …, Image 2: …", and say how they interact.
-- No transparent backgrounds via Codex today; use a plain solid background and cut out afterwards.
+- Transparent background: end the prompt with "on a transparent background." Codex returns a real alpha
+  channel; the `gpt-image-transparent` skill finishes and checks it.
 
 ---
 
@@ -224,7 +225,7 @@ with a similar silhouette".
 | Hands or anatomy wrong | Describe the action geometry ("hands naturally gripping…", "full body visible, feet included"); add "natural proportions, anatomically correct hands". |
 | Faces drift across images | Attach the anchor image as a reference every time; lock "same facial features, proportions and color palette". |
 | Looks "too AI" | Photography language + texture realism + "no glamorization, no heavy retouching"; drop filler words. |
-| Need a transparent background | Not available via Codex today: plain solid background, cut out afterwards. |
+| Need a transparent background | "… on a transparent background." via the `gpt-image-transparent` skill. Don't ask for a shadow or floor. |
 | Output is a side-by-side collage of the inputs | Give every input a role in the prompt; drop references the edit doesn't need. |
 | Layout drifts in long edit chains | Re-paste the preserve list verbatim each turn; attach the latest output as Image 1. |
 | Slow generation | Simplify the prompt; fewer inputs; run batches in the background. |

@@ -42,8 +42,8 @@ Rules:
   then an explicit preserve list. Restate invariants in full on every turn.
 - Text in images: quote verbatim, give font style, weight, size, colour, placement, add "appears
   exactly once, no extra text". Spell unusual words letter by letter.
-- Exclusions go in the prompt text. Transparent backgrounds are not available via Codex today: use a
-  plain solid background and suggest cutting out afterwards.
+- Exclusions go in the prompt text. For a transparent background, end the prompt with "on a transparent
+  background." and tell the caller to run it through the `gpt-image-transparent` skill.
 - Input images: number them as the wrapper attaches them (`--edit-target` first, then `--image`, then
   `@path` tokens) and give each a role ("Edit Image 1. Use Image 2 only as a reference for …");
   without roles the model may return a collage. References are files; never replace a missing

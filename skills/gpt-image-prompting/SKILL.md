@@ -52,8 +52,8 @@ the conversation around it follows the user's language.
 - **Text in images:** quote the copy verbatim, give font style, weight, size, colour and placement,
   and add "appears exactly once, no extra text". Spell unusual words letter by letter.
 - **Exclusions** go in the prompt text itself.
-- **Transparent backgrounds** are not available via Codex today: ask for a plain solid background
-  and suggest cutting it out afterwards.
+- **Transparent backgrounds:** end the prompt with "on a transparent background." and hand it to
+  the `gpt-image-transparent` skill, which generates it and finishes the alpha.
 - **Input images:** refer to them as Image 1, Image 2, … in the order the wrapper attaches them
   (`--edit-target` first, then `--image`, then `@path` tokens) and give each a role ("Edit Image 1.
   Use Image 2 only as a reference for …"); without roles the model may return a collage. Every
