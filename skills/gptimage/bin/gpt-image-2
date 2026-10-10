@@ -1,0 +1,344 @@
+#!/usr/bin/env python3
+"""Generate or edit an image with Codex's image_generation tool (your ChatGPT subscription).
+
+Usage:
+  # text -> image
+  gpt-image-2 "<prompt>" <output.png> [--size WxH|auto]
+
+  # edit the previous result (it becomes Image 1), with optional extra references
+  gpt-image-2 "<prompt>" <output-v2.png> --edit-target <previous.png> [--image <ref.png> ...]
+
+  # references inside the prompt
+  gpt-image-2 "Use @references/character.png as the character reference ..." <output.png>
+
+Options:
+  --edit-target PATH        image to edit; sent as Image 1
+  --image PATH              reference image (repeatable), numbered after the edit target
+  --size WxH|auto           shape hint (square / portrait / landscape); Codex picks the pixels
+  --orchestrator-model M    auto (default) | account-default | <model id>
+  --model M                 alias of --orchestrator-model
+  --timeout SEC             default 900
+  --overwrite               allow replacing an existing output file
+  --check                   only verify python3 + Codex login, print OK
+
+`@path` tokens with a .png/.jpg/.jpeg/.webp extension are attached as input images and
+replaced by "Image N" in the prompt that is sent. Everything else is sent verbatim.
+
+Runs `codex exec` on the ChatGPT account you are logged in with (`codex login`).
+Prints the absolute output path on success; errors go to stderr with a non-zero exit
+(2 = bad arguments or input files, 3 = Codex missing or not logged in with ChatGPT).
+"""
+import base64
+import glob
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+DEFAULT_ORCHESTRATOR = os.environ.get("GPTIMAGE_CODEX_MODEL", "auto")
+DEFAULT_TIMEOUT = 900
+CODEX_HOME = os.path.expanduser(os.environ.get("CODEX_HOME", "~/.codex"))
+IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp")
+# @path tokens: not preceded by a word char (so emails don't match), ending in an image extension.
+REF_PATTERN = re.compile(r"(?<![\w.])@((?:~|\.{1,2})?/?[^\s@\"'`]+?\.(?:png|jpe?g|webp))(?=$|[\s,;:!?)\]}\"'`]|\.(?:\s|$))",
+                         re.IGNORECASE)
+
+
+def die(msg, code=1):
+    print(f"gpt-image-2: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def check_codex():
+    if not shutil.which("codex"):
+        die("codex CLI not found. Install it (brew install codex, or npm i -g @openai/codex) "
+            "and run `codex login`.", 3)
+    r = subprocess.run(["codex", "login", "status"], capture_output=True, text=True)
+    status = (r.stdout + r.stderr).strip()
+    if r.returncode != 0 or "ChatGPT" not in status:
+        die(f"Codex is not logged in with a ChatGPT account ({status or 'no status'}). "
+            "Run `codex login` and choose ChatGPT.", 3)
+    return status
+
+
+def aspect_hint(size):
+    if not size or size == "auto":
+        return None
+    try:
+        w, h = (int(v) for v in size.lower().split("x"))
+    except ValueError:
+        die(f"invalid --size: {size} (use WxH or auto)", 2)
+    if w == h:
+        shape = "square"
+    elif w > h:
+        shape = "landscape"
+    else:
+        shape = "portrait"
+    return f"{shape}, aspect ratio {w}:{h} ({size})"
+
+
+def validate_image(path, what):
+    path = os.path.abspath(os.path.expanduser(path))
+    if not path.lower().endswith(IMAGE_EXTS):
+        die(f"{what} must be a PNG, JPEG or WebP file: {path}", 2)
+    if not os.path.isfile(path) or not os.access(path, os.R_OK):
+        die(f"{what} not found or not readable: {path}", 2)
+    return path
+
+
+def resolve_prompt_refs(prompt, first_index):
+    """Replace @path image tokens with 'Image N'. Returns (sent_prompt, paths, mapping)."""
+    paths, mapping, index_of = [], [], {}
+
+    def sub(m):
+        token = m.group(1)
+        path = validate_image(token, f"reference @{token}")
+        if path not in index_of:
+            index_of[path] = first_index + len(paths)
+            paths.append(path)
+            mapping.append((token, index_of[path]))
+        return f"Image {index_of[path]}"
+
+    return REF_PATTERN.sub(sub, prompt), paths, mapping
+
+
+def build_instruction(prompt, n_images, size, has_edit_target):
+    lines = [
+        "Call the image_generation tool exactly once to create this image.",
+        "Use the text between the markers as the image prompt, character for character. "
+        "Do not rewrite, translate, shorten, expand or add anything to it.",
+        "Do not write scripts, do not run shell commands, do not create files yourself.",
+    ]
+    if n_images:
+        lines.append(f"The {n_images} attached image(s) are Image 1 to Image {n_images}, "
+                     "in the order attached. Pass them to the image_generation tool as "
+                     "reference/edit inputs.")
+    if has_edit_target:
+        lines.append("Image 1 is the image to edit. "
+                     + ("Images 2 to %d are references." % n_images if n_images > 1 else ""))
+    hint = aspect_hint(size)
+    if hint:
+        lines.append(f"Output shape: {hint}. If the tool lets you set a size, use it; "
+                     "do not add aspect-ratio words to the prompt.")
+    lines.append("After the tool returns, reply with only the word DONE.")
+    return "\n".join(l.strip() for l in lines) + f"\n<<<PROMPT\n{prompt}\nPROMPT>>>"
+
+
+def build_command(workdir, orchestrator, images):
+    cmd = ["codex", "exec", "--json", "--ignore-user-config", "--skip-git-repo-check",
+           "-s", "read-only", "-C", workdir]
+    if orchestrator not in ("auto", "account-default"):
+        cmd += ["-m", orchestrator]
+    if orchestrator != "account-default":
+        cmd += ["-c", 'model_reasoning_effort="low"']
+    for p in images:
+        cmd += ["-i", p]
+    return cmd
+
+
+def read_events(stdout):
+    events = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if line:
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+    return events
+
+
+def find_rollout(thread_id):
+    hits = glob.glob(os.path.join(CODEX_HOME, "sessions", "**", f"rollout-*{thread_id}.jsonl"),
+                     recursive=True)
+    return max(hits, key=os.path.getmtime) if hits else None
+
+
+def image_results(rollout):
+    """image_generation_end payloads from a Codex session log, oldest first."""
+    results = []
+    with open(rollout) as f:
+        for line in f:
+            if "image_generation_end" not in line:
+                continue
+            try:
+                payload = json.loads(line).get("payload") or {}
+            except json.JSONDecodeError:
+                continue
+            if payload.get("type") == "image_generation_end":
+                results.append(payload)
+    return results
+
+
+def failure_reason(events, stderr):
+    for e in reversed(events):
+        if e.get("type") in ("turn.failed", "error"):
+            err = e.get("error") or {}
+            return err.get("message") or e.get("message") or json.dumps(e)
+    for e in reversed(events):
+        item = e.get("item") or {}
+        if item.get("type") == "agent_message" and item.get("text", "").strip() != "DONE":
+            return f"Codex replied without an image: {item.get('text', '').strip()}"
+    tail = [l for l in stderr.splitlines() if "codex_models_manager" not in l][-5:]
+    return "\n".join(tail) or "no image was generated"
+
+
+def convert_to_jpeg(src, out):
+    if shutil.which("sips"):
+        cmd = ["sips", "-s", "format", "jpeg", src, "--out", out]
+    elif shutil.which("magick"):
+        cmd = ["magick", src, out]
+    else:
+        die("cannot write .jpg/.jpeg: neither sips (macOS) nor magick (ImageMagick) is "
+            "available. Use a .png output path instead.", 2)
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        die(f"could not convert {src} to JPEG: {r.stderr.strip()}", 1)
+
+
+def write_output(result, out):
+    src = result.get("saved_path")
+    is_png = out.lower().endswith(".png")
+    if src and os.path.isfile(src):
+        if is_png:
+            shutil.copyfile(src, out)
+        else:
+            convert_to_jpeg(src, out)
+    elif result.get("result"):
+        data = base64.b64decode(result["result"])
+        if is_png:
+            with open(out, "wb") as f:
+                f.write(data)
+        else:
+            tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+            tmp.write(data)
+            tmp.close()
+            try:
+                convert_to_jpeg(tmp.name, out)
+            finally:
+                os.unlink(tmp.name)
+    else:
+        die("Codex reported an image but it has no saved_path or data", 1)
+
+
+def parse_args(argv):
+    if argv == ["--check"]:
+        return {"check": True}
+    if len(argv) < 2:
+        die('usage: gpt-image-2 "<prompt>" <output.png> [--edit-target <img>] [--image <img> ...] '
+            '[--size WxH|auto] [--orchestrator-model auto|account-default|<id>] '
+            '[--timeout SEC] [--overwrite]   (or: gpt-image-2 --check)', 2)
+    opts = {"check": False, "prompt": argv[0], "out": argv[1], "size": None,
+            "orchestrator": DEFAULT_ORCHESTRATOR, "timeout": DEFAULT_TIMEOUT,
+            "images": [], "edit_target": None, "overwrite": False}
+    rest = argv[2:]
+    i = 0
+    while i < len(rest):
+        a = rest[i]
+        val = rest[i + 1] if i + 1 < len(rest) else None
+        if a == "--overwrite":
+            opts["overwrite"] = True; i += 1; continue
+        if val is None:
+            die(f"unknown or incomplete arg: {a}", 2)
+        if a == "--size":
+            opts["size"] = val
+        elif a in ("--orchestrator-model", "--model"):
+            opts["orchestrator"] = val
+        elif a == "--timeout":
+            try:
+                opts["timeout"] = int(val)
+            except ValueError:
+                die(f"invalid --timeout: {val}", 2)
+        elif a == "--image":
+            opts["images"].append(val)
+        elif a == "--edit-target":
+            opts["edit_target"] = val
+        elif a == "--quality":
+            pass  # accepted for old callers; has no effect on the Codex route
+        else:
+            die(f"unknown or incomplete arg: {a}", 2)
+        i += 2
+    return opts
+
+
+def prepare(opts):
+    """Validate paths and resolve references. Returns (out, images, sent_prompt, mapping)."""
+    out = os.path.abspath(os.path.expanduser(opts["out"]))
+    if not out.lower().endswith((".png", ".jpg", ".jpeg")):
+        die(f"output must end in .png, .jpg or .jpeg: {out}", 2)
+    if not os.path.isdir(os.path.dirname(out)):
+        die(f"output dir does not exist: {os.path.dirname(out)}", 2)
+
+    images = []
+    if opts["edit_target"]:
+        target = validate_image(opts["edit_target"], "--edit-target")
+        if target == out:
+            die("output path must differ from --edit-target (save revisions as -v2, -v3, ...)", 2)
+        images.append(target)
+    for p in opts["images"]:
+        path = validate_image(p, "--image")
+        if path not in images:
+            images.append(path)
+
+    sent_prompt, ref_paths, mapping = resolve_prompt_refs(opts["prompt"], len(images) + 1)
+    for p in ref_paths:
+        if p in images:
+            die(f"@reference {p} is already attached via --image/--edit-target; use it once", 2)
+    images += ref_paths
+
+    if os.path.exists(out) and not opts["overwrite"]:
+        die(f"output already exists: {out} (pick a new name such as -v2, or pass --overwrite)", 2)
+    return out, images, sent_prompt, mapping
+
+
+def main():
+    opts = parse_args(sys.argv[1:])
+    if opts["check"]:
+        status = check_codex()
+        print(f"OK (python {sys.version.split()[0]}; {status.splitlines()[0]})")
+        return
+
+    out, images, sent_prompt, mapping = prepare(opts)
+    for token, n in mapping:
+        print(f"gpt-image-2: @{token} -> Image {n}", file=sys.stderr)
+
+    check_codex()
+
+    workdir = tempfile.mkdtemp(prefix="gptimage-")
+    cmd = build_command(workdir, opts["orchestrator"], images)
+    instruction = build_instruction(sent_prompt, len(images), opts["size"],
+                                    bool(opts["edit_target"]))
+    try:
+        proc = subprocess.run(cmd, input=instruction, capture_output=True, text=True,
+                              timeout=opts["timeout"])
+    except subprocess.TimeoutExpired:
+        die(f"codex exec timed out after {opts['timeout']}s (raise --timeout)", 1)
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
+
+    events = read_events(proc.stdout)
+    thread_id = next((e.get("thread_id") for e in events if e.get("type") == "thread.started"), None)
+    rollout = find_rollout(thread_id) if thread_id else None
+    results = [r for r in image_results(rollout) if r.get("status") == "completed"] if rollout else []
+    if not results:
+        die(f"Codex did not return an image: {failure_reason(events, proc.stderr)}", 1)
+
+    write_output(results[-1], out)
+
+    revised = results[-1].get("revised_prompt") or ""
+    if " ".join(revised.split()) != " ".join(sent_prompt.split()):
+        note = out + ".revised_prompt.txt"
+        with open(note, "w") as f:
+            if sent_prompt != opts["prompt"]:
+                f.write(f"GIVEN:\n{opts['prompt']}\n\n")
+            f.write(f"SENT:\n{sent_prompt}\n\nUSED BY CODEX:\n{revised}\n")
+        print(f"gpt-image-2: warning: Codex changed the prompt; see {note}", file=sys.stderr)
+
+    print(out)
+
+
+if __name__ == "__main__":
+    main()

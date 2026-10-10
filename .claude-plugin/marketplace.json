@@ -1,0 +1,16 @@
+{
+  "name": "chatgpt-image-skill",
+  "description": "Codex-based image generation for Claude Code on your ChatGPT subscription.",
+  "owner": {
+    "name": "Attija",
+    "email": "attdevries@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "chatgpt-image",
+      "source": "./",
+      "description": "Image generation via Codex (ChatGPT subscription) with prompt skill and prompt agent.",
+      "version": "1.0.0"
+    }
+  ]
+}

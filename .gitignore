@@ -1,0 +1,9 @@
+generated-images/
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.revised_prompt.txt
+.DS_Store
+__pycache__/
+!assets/*.png
