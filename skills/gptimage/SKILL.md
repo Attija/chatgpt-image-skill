@@ -60,20 +60,31 @@ After the wrapper returns, `Read` the image back so you can check it before resp
   to the wrapper (`--image`, `--edit-target` or `@path`).
 - Never replace an unresolved reference with a text description and continue. Stop and ask
   for the file.
-- Prefer `@path/to/image.png` or an explicit filesystem path. An image pasted or dragged
-  into the conversation is **not** inherited by the nested `codex exec` process.
-- If the host shows an exact, readable temporary path for an attachment, copy that exact
-  file into `<project>/generated-images/inputs/` and use the copy. If there is no path, ask
-  the user to save the image inside the project and give you the path.
-- Never guess from `~/.claude/image-cache` or pick "the newest image"; that can select the
-  wrong or a private file.
+- **A pasted or dragged image is a reference, automatically.** The nested `codex exec` does
+  not inherit it, so pass it as a file. When the user's message carries an image with a
+  host-reported path (`[Image: source: <path>]`, numbered like `[Image #1]`) or a dragged file
+  path outside the project:
+  1. `mkdir -p references` and copy exactly that file to `references/<short-name>.<ext>`
+     (keep the extension; if the name exists, add `-2`, `-3`; never overwrite). Copy before
+     generating: the host's cache is temporary. A file already inside the project is used as is.
+  2. Pick the role from the user's words: "edit this", "change this photo", "turn this into …"
+     → `--edit-target`; otherwise ("put this person …", "in this style", "use this logo") →
+     `--image`. With several images keep the order `[Image #1]`, `#2`, …
+  3. Tell the user in one line which file goes in as what, e.g. "Your photo goes in as
+     Image 1 (edit target), saved as `references/selfie.png`."
+- Use only the host-reported path of the image the user means (in this message, or one they
+  point back to). Never search `~/.claude/image-cache` or pick "the newest image"; that can
+  select the wrong or a private file.
+- If the host reports no path, ask the user to save the image inside the project (or drag the
+  file in) and give you the path.
 
 ## Rule 3 — Revisions edit the latest result
 
 - Every wrapper call is independent; Codex remembers nothing between calls.
 - For "change the image you just made", pass the previous output as `--edit-target` and
   re-attach every reference that the change still needs (one the previous output already
-  carries, such as a character it shows, is usually not needed).
+  carries, such as a character it shows, is usually not needed). Re-attach a pasted image
+  from its copy in `references/`, never from the host's cache path.
 - With an edit target plus extra references, the model may return a side-by-side collage of
   all inputs. When you attach references to an edit, the prompt must say which image is edited
   and what each reference is for, e.g. "Edit Image 1 … Use Image 2 only as a reference for the

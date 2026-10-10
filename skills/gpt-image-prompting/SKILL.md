@@ -58,6 +58,8 @@ the conversation around it follows the user's language.
   (`--edit-target` first, then `--image`, then `@path` tokens) and give each a role ("Edit Image 1.
   Use Image 2 only as a reference for …"); without roles the model may return a collage. Every
   reference must be a real file path; never replace a missing reference with a description.
+  A pasted image counts as an input once it is copied to `references/` (gptimage Rule 2); use
+  that path, never the host's cache path.
 
 ## Output format
 

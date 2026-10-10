@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2 — 2026-10-10
+
+- Een foto die je in de chat plakt of sleept gaat automatisch mee naar Codex: Claude kopieert hem naar `references/` in je project en stuurt hem mee als te bewerken beeld (`--edit-target`) of als referentie (`--image`), afhankelijk van je woorden.
+- Bij revisies gaat de kopie uit `references/` mee, nooit het tijdelijke cachepad. Meldt Claude Code geen pad, dan vraagt Claude om het bestand.
+
 ## 1.1.1 — 2026-10-10
 
 - Evals vereenvoudigd tot één lijst, `evals/trigger-evals.json`: 4 korte zinnen die moeten triggeren (transparante achtergrond, zonder achtergrond, uitgeknipt, achtergrond weghalen) en 3 die dat niet moeten doen.

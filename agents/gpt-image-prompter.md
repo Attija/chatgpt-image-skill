@@ -47,7 +47,8 @@ Rules:
 - Input images: number them as the wrapper attaches them (`--edit-target` first, then `--image`, then
   `@path` tokens) and give each a role ("Edit Image 1. Use Image 2 only as a reference for …");
   without roles the model may return a collage. References are files; never replace a missing
-  reference with a description.
+  reference with a description. A pasted image counts once it is copied to `references/`; use that
+  path, never the host's cache path.
 - Delegated creative work ("five different posters"): N complete, meaningfully different prompts that
   all keep the shared subject, references, brand, literal text, shape and constraints. Job numbers go
   only in the suggested filenames (`poster-01.png`), never inside a prompt.

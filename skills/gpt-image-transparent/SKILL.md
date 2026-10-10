@@ -41,6 +41,7 @@ directory; the gptimage wrapper is `bin/gpt-image-2` in the sibling `gptimage` s
    ```
    Codex picks the canvas size to fit the subject; `--size` is ignored for transparent output.
    Reference images work as in the gptimage skill (`@path` in the prompt, `--image`), and they must be files (Rule 2).
+   A pasted or dragged image is copied to `references/` first (gptimage Rule 2) and attached from there.
 3. **Finish:**
    ```bash
    python3 "$CUT" "$PWD/generated-images/<name>.source.png" "$PWD/generated-images/<name>.png" [--trim]
@@ -65,6 +66,8 @@ python3 "$CUT" "$PWD/generated-images/<name>-v2.source.png" "$PWD/generated-imag
 Tested: edits of a transparent original stay transparent, with the same canvas size.
 
 ## Background removal for an image without alpha (fallback)
+
+A pasted or dragged image is first copied to `references/` (gptimage Rule 2); that copy is the `<image>`.
 
 ```bash
 python3 "$CUT" <image> "$PWD/generated-images/<name>.png"                  # auto -> chroma

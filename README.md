@@ -91,6 +91,8 @@ Praat gewoon met Claude Code, in het Nederlands of Engels.
 |---|---|
 | *maak een afbeelding: "A red bicycle leaning against a white wall"* | Eén beeld; de tekst tussen quotes gaat letterlijk naar Codex. |
 | *gebruik @references/character.png als personage en zet hem in een regenachtige straat in Tokio* | Het bestand gaat echt mee als referentie (Image 1). |
+| *[geplakte foto] maak hier een olieverfschilderij van* | Claude bewaart je foto in `references/` en bewerkt hem. |
+| *[geplakte selfie] zet deze persoon voor de Eiffeltoren* | Je selfie gaat mee als referentie voor een nieuw beeld. |
 | *maak de paraplu geel* (na het vorige beeld) | Het **laatste resultaat** wordt bewerkt en opgeslagen als `…-v2.png`. |
 | *maak vijf verschillende posterontwerpen voor mijn bakkerij* | Vijf aparte concepten, `poster-01.png` t/m `poster-05.png`. |
 | *maak een logo van een vos met transparante achtergrond* | Echte PNG met alpha, afgewerkt en gekeurd (zie hieronder). |
@@ -107,7 +109,8 @@ De beelden komen in `generated-images/` in je project. Die map staat in `.gitign
    - Volgnummers staan alleen in de bestandsnaam, nooit in de prompt.
 2. **Referenties zijn bestanden, geen beschrijvingen.**
    - Verwijs met `@pad/naar/beeld.png` of een volledig pad. Toegestaan zijn PNG, JPEG en WebP.
-   - Een plaatje dat je in de chat plakt of sleept gaat **niet** vanzelf mee naar Codex. Sla het op in je project, bijvoorbeeld in `references/`, en verwijs ernaar.
+   - Een foto die je in de chat plakt of sleept gaat **automatisch** mee naar Codex. Claude zet een kopie in `references/` in je project, zodat hij bij een revisie nog beschikbaar is. Die map staat niet vanzelf in `.gitignore`; zet hem erin als je die foto's niet wilt committen.
+   - Uit je woorden blijkt de rol: "bewerk deze foto" of "maak hier … van" bewerkt jouw foto; "zet deze persoon …" of "in deze stijl" gebruikt hem als referentie.
    - Ontbreekt een referentie, dan stopt Claude en vraagt om het bestand. Het beeld wordt nooit stiekem "beschreven".
 3. **Een revisie bewerkt altijd het laatste resultaat.**
    - Elke aanroep staat op zichzelf. Bij "pas het aan" wordt het vorige beeld de bewerkingsbasis. Referenties gaan alleen opnieuw mee als de wijziging ze nodig heeft.
@@ -218,6 +221,7 @@ ook als sessie in je Codex-geschiedenis.
 | `exit 3` / *not logged in with a ChatGPT account* | `codex login` → "Sign in with ChatGPT". |
 | `exit 2` / *not found or not readable* | Het referentiebestand bestaat niet of het pad klopt niet. Gebruik een pad binnen je project. |
 | `exit 2` / *output already exists* | Kies een nieuwe naam (`-v2`) of geef `--overwrite` mee. |
+| Claude vraagt toch om een bestand bij een geplakte foto | Jouw Claude Code-omgeving geeft geen pad bij geplakte beelden door. Sleep het bestand in de chat of zet het in `references/`. |
 | *Codex changed the prompt* | Codex heeft je prompt aangepast. Beide versies staan in `<beeld>.revised_prompt.txt`. |
 | Codex-model niet beschikbaar in je workspace | Laat `--orchestrator-model` op `auto` staan, of vraag je beheerder Codex aan te zetten. |
 | Limiet bereikt | Wacht tot de ChatGPT-limiet is gereset. |
